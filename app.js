@@ -20,6 +20,23 @@ const categories = [
   ] }
 ];
 
+// Broad examples outside the target set. These help reject unrelated photos.
+// This is a heuristic, not a calibrated open-set recognition model.
+const backgroundCategories = [
+  { key: 'dog', prompts: ['a photograph of a dog', 'a photo of a pet dog'] },
+  { key: 'cat', prompts: ['a photograph of a cat', 'a domestic cat sitting'] },
+  { key: 'person', prompts: ['a portrait photograph of a person', 'people standing together in a photograph'] },
+  { key: 'car', prompts: ['a photograph of a car', 'a vehicle parked on a street'] },
+  { key: 'building', prompts: ['a photograph of a building', 'a house on a street'] },
+  { key: 'landscape', prompts: ['a landscape photograph of mountains', 'a photograph of a beach and the sea'] },
+  { key: 'bird', prompts: ['a photograph of a bird', 'a small bird perched on a branch'] },
+  { key: 'flower', prompts: ['a close-up photograph of a flower', 'a bouquet of colorful flowers'] },
+  { key: 'food', prompts: ['a photograph of a sandwich', 'a plate of cooked food'] },
+  { key: 'chair', prompts: ['a photograph of a chair', 'a wooden chair in a room'] },
+  { key: 'phone', prompts: ['a photograph of a smartphone', 'a mobile phone on a table'] },
+  { key: 'bicycle', prompts: ['a photograph of a bicycle', 'a person riding a bicycle'] }
+];
+
 let classifier = null;
 let loadingPromise = null;
 let selectedFile = null;
@@ -136,35 +153,62 @@ async function getClassifier() {
 }
 
 function displayResults(output) {
-  const scores = new Map(categories.map((category) => [category.key, 0]));
+  // Average the prompt scores per category to avoid favoring categories
+  // merely because they have more text examples.
+  const options = [...categories, ...backgroundCategories];
   const byPrompt = new Map();
-  for (const category of categories) {
+  for (const category of options) {
     for (const prompt of category.prompts) byPrompt.set(prompt, category.key);
   }
+  const totals = new Map(options.map((category) => [category.key, 0]));
   for (const item of output) {
     const key = byPrompt.get(item.label);
-    if (key && Number.isFinite(item.score)) scores.set(key, scores.get(key) + item.score);
+    if (key && Number.isFinite(item.score)) {
+      totals.set(key, totals.get(key) + item.score);
+    }
   }
-  const ordered = categories.map((category) => ({
+  const mean = (category) => totals.get(category.key) / category.prompts.length;
+  const rankedTargets = categories.map((category) => ({
     ...category,
-    score: scores.get(category.key)
-  })).sort((a, b) => b.score - a.score);
-  const total = ordered.reduce((sum, x) => sum + x.score, 0);
-  if (!(total > 0)) throw new Error('AIの出力から判定スコアを取得できませんでした');
-  for (const result of ordered) result.score /= total;
+    raw: mean(category),
+  })).sort((a, b) => b.raw - a.raw);
+  const bestRaw = rankedTargets[0].raw;
+  const totalTarget = rankedTargets.reduce((sum, x) => sum + x.raw, 0);
+  if (!(totalTarget > 0)) throw new Error('AIの判定スコアを取得できませんでした');
 
-  const best = ordered[0];
-  const gap = best.score - ordered[1].score;
-  $('resultMode').textContent = 'CLIPによる3種類の画像比較';
-  $('resultEmoji').textContent = best.emoji;
-  $('resultName').textContent = best.label;
-  $('resultText').textContent = gap < 0.10
-    ? '1位と2位の差が小さいため、判定があいまいです。'
-    : '最も近い候補は「' + best.label + '」です。';
+  // These are conditional three-way scores, NOT the probability that
+  // the image belongs to one of the three known categories.
+  for (const target of rankedTargets) target.score = target.raw / totalTarget;
+  const best = rankedTargets[0];
+  const gap = best.score - rankedTargets[1].score;
+  const otherBest = Math.max(...backgroundCategories.map(mean));
+
+  // Provisional, user-requested thresholds. Accuracy must be tested.
+  // In addition, compare against explicit unrelated concepts so a
+  // clearly unrelated image does not always get forced into the top 3.
+  const isUnrelated = best.score < 0.50 || otherBest > bestRaw * 1.10;
+  const isAmbiguous = !isUnrelated && gap < 0.08;
+
+  $('resultMode').textContent = 'CLIPによる画像判定';
+  if (isUnrelated) {
+    $('resultEmoji').textContent = '🚫';
+    $('resultName').textContent = '関係ない可能性が高い';
+    $('resultText').textContent =
+      'りんご・ゴリラ・ラッパのいずれにも十分一致しないと推定しました。';
+  } else if (isAmbiguous) {
+    $('resultEmoji').textContent = '❔';
+    $('resultName').textContent = '判定があいまい';
+    $('resultText').textContent =
+      '上位2候補のスコア差が小さいため、断定できません。';
+  } else {
+    $('resultEmoji').textContent = best.emoji;
+    $('resultName').textContent = best.label;
+    $('resultText').textContent = '最も近い候補は「' + best.label + '」です。';
+  }
 
   const container = $('scores');
   container.replaceChildren();
-  for (const item of ordered) {
+  for (const item of rankedTargets) {
     const wrapper = document.createElement('div');
     const title = document.createElement('div');
     title.className = 'score-title';
@@ -179,15 +223,16 @@ function displayResults(output) {
     fill.style.width = Math.max(0, Math.min(100, item.score * 100)) + '%';
     track.append(fill);
     wrapper.append(title, track);
-    container.append(wrapper);
   }
   container.hidden = false;
   $('scoreNote').textContent =
-    'スコアは3種類の候補間の相対的な一致度であり、正解する確率ではありません。候補以外の写真でも、いずれかを表示します。';
+    '3候補の相対スコアは正解確率ではありません。「関係ない」「あいまい」の判定は暫定的な基準によるもので、誤判定する場合があります。';
   $('scoreNote').hidden = false;
-  setNotice(gap < 0.10
-    ? '判定が接戦です。別角度の写真でも比較してみてください。'
-    : '見本登録なしで、画像と各候補の説明文を直接比較しました。');
+  setNotice(isUnrelated
+    ? '対象外の例との比較・スコア基準から、3種類以外と推定しました。判定は確定ではありません。'
+    : isAmbiguous
+      ? '上位2候補が接戦です。別の写真でも試してみてください。'
+      : '見本登録なしで、画像と各候補の説明文を比較しました。');
 }
 
 $('analyze').addEventListener('click', async () => {
@@ -199,7 +244,7 @@ $('analyze').addEventListener('click', async () => {
     const model = await getClassifier();
     setStatus('画像を判定しています…');
     objectUrl = URL.createObjectURL(selectedFile);
-    const prompts = categories.flatMap((category) => category.prompts);
+    const prompts = [...categories, ...backgroundCategories].flatMap((category) => category.prompts);
     const output = await model(objectUrl, prompts);
     displayResults(output);
     setStatus('AIの準備完了', 'ready');
