@@ -110,7 +110,7 @@
         </section>
         <section class="panel" aria-labelledby="resultTitle">
           <h2 id="resultTitle">02. AIの判定</h2>
-          <p class="hint">3候補の相対スコアを表示します。正解確率ではありません。</p>
+          <p class="hint">3候補の相対スコアを表示します。関係ない写真は「対象外」、接戦なら「あいまい」とお知らせします。</p>
           <div class="result-box" aria-live="polite">
             <div class="eyebrow" id="resultMode">判定待ち</div>
             <div class="prediction"><span class="prediction-emoji" id="resultEmoji">🔎</span><span class="prediction-name" id="resultName">画像を選んでください</span></div>
@@ -118,11 +118,11 @@
             <div class="scores" id="scores" hidden></div>
             <p class="score-note" id="scoreNote" hidden></p>
           </div>
-          <div class="notice warning" id="modeNotice">見本登録不要のAIを使用します。初回はモデルのダウンロードに時間がかかる場合があります。</div>
+          <div class="notice warning" id="modeNotice">見本登録不要のAIを使用します。対象外判定は暫定的な基準によるため、誤判定する場合があります。</div>
         </section>
       </div>
       <div class="bottom">
-        <section class="panel"><h3>💡 使い方</h3><ul><li>写真を選択して「AIで判定する」を押すだけです</li><li>事前の見本画像登録は不要です</li><li>候補以外の画像でもいずれかに分類されます。表示スコアは正解確率ではありません</li></ul></section>
+        <section class="panel"><h3>💡 使い方</h3><ul><li>写真を選択して「AIで判定する」を押すだけです</li><li>事前の見本画像登録は不要です</li><li>関係ない写真なら「関係ない可能性が高い」、接戦なら「判定があいまい」と表示します</li><li>表示スコアは正解確率ではなく、対象外判定も完全ではありません</li></ul></section>
       </div>
     </main>
     <footer>Little Vision Lab · 無料・サーバー不要の画像判定デモ</footer>
