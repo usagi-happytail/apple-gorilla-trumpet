@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#f4f7fc" />
-  <meta name="description" content="画像をりんご・ゴリラ・ラッパに分類する無料のブラウザAIデモ。見本を登録して判定を調整できます。" />
+  <meta name="description" content="見本の事前登録なしで、りんご・ゴリラ・ラッパを判定する無料Webアプリ。" />
   <title>りんご・ゴリラ・ラッパ AI画像判定</title>
   <style>
     :root { color-scheme: light; --ink:#15213e; --sub:#60708f; --line:#e2e8f2; --blue:#3869e8; --bg:#f4f7fc; --white:#fff; --green:#17865e; --shadow:0 18px 54px rgba(27,53,106,.08); }
@@ -82,8 +82,6 @@
     @media(max-width:750px) {.shell{padding:18px 15px 44px}.columns,.bottom,.train-grid{grid-template-columns:1fr}.panel{padding:18px;border-radius:18px}header{align-items:flex-start}.status{max-width:50%;font-size:11px}.tags{margin-bottom:20px}.lead{font-size:13px}.drop{min-height:240px}.drop.has-image{min-height:240px}.training-head{gap:10px}.train-actions>.button{width:100%}}
     @media(prefers-reduced-motion:reduce){*{transition:none!important}}
   </style>
-  <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
   <script defer src="./app.js"></script>
 </head>
 <body>
@@ -94,7 +92,7 @@
     </header>
     <main>
       <h1>この写真は、<br><span>なにが写っている？</span></h1>
-      <p class="lead">画像を選ぶだけでAIが判定。まずは「りんご・ゴリラ・ラッパ」の3種類から実験してみましょう。</p>
+      <p class="lead">見本登録は不要。写真を選んでボタンを押すだけで、りんご・ゴリラ・ラッパの3候補を比較します。</p>
       <div class="tags"><span class="tag">🍎 りんご</span><span class="tag">🦍 ゴリラ</span><span class="tag">🎺 ラッパ</span></div>
       <div class="columns">
         <section class="panel" aria-labelledby="uploadTitle">
@@ -108,11 +106,11 @@
             <div class="drop-note" id="dropNote">またはここに画像をドロップ</div>
           </div>
           <div class="buttons"><button class="button" id="analyze" disabled>AIで判定する</button><button class="button secondary" id="reset" type="button">画像をクリア</button></div>
-          <div class="notice">🔒 写真の判定処理はブラウザ内で実行します。画像自体をサービス側へアップロードする処理はありません。初回はAIモデルの読み込みにインターネット接続が必要です。</div>
+          <div class="notice">🔒 写真の判定処理はブラウザ内で実行します。画像自体をサービス側へアップロードする処理はありません。初回はAIモデルのダウンロードが必要で、通信量や読み込み時間が大きくなる場合があります。</div>
         </section>
         <section class="panel" aria-labelledby="resultTitle">
           <h2 id="resultTitle">02. AIの判定</h2>
-          <p class="hint">判定結果と、3種類のスコアを表示します。</p>
+          <p class="hint">3候補の相対スコアを表示します。正解確率ではありません。</p>
           <div class="result-box" aria-live="polite">
             <div class="eyebrow" id="resultMode">判定待ち</div>
             <div class="prediction"><span class="prediction-emoji" id="resultEmoji">🔎</span><span class="prediction-name" id="resultName">画像を選んでください</span></div>
@@ -120,21 +118,11 @@
             <div class="scores" id="scores" hidden></div>
             <p class="score-note" id="scoreNote" hidden></p>
           </div>
-          <div class="notice warning" id="modeNotice">はじめは一般画像用のAIで判定します。赤いりんごなどは、うまく分類できない場合があります。下のお手本登録で改善を試せます。</div>
+          <div class="notice warning" id="modeNotice">見本登録不要のAIを使用します。初回はモデルのダウンロードに時間がかかる場合があります。</div>
         </section>
       </div>
-      <section class="panel wide" aria-labelledby="trainTitle">
-        <div class="training-head"><div><h2 id="trainTitle">03. お手本を登録して判定を調整</h2><p class="hint" style="margin-bottom:0">各種類の見本を2枚以上ずつ登録すると、写真の特徴を比べる「お手本判定」に切り替わります。</p></div><span class="training-icon" aria-hidden="true">🧠</span></div>
-        <div class="train-grid">
-          <div><label for="trainLabel">何の写真を登録しますか？</label><select id="trainLabel"><option value="apple">🍎 りんご</option><option value="gorilla">🦍 ゴリラ</option><option value="trumpet">🎺 ラッパ</option></select></div>
-          <div class="train-actions"><button class="button" id="addTraining" disabled>見本画像を追加する（複数可）</button><input type="file" id="trainFile" multiple accept="image/*" aria-label="見本画像ファイル" /></div>
-        </div>
-        <div class="count-list" id="counts"><div class="count">🍎 りんご <b>0枚</b></div><div class="count">🦍 ゴリラ <b>0枚</b></div><div class="count">🎺 ラッパ <b>0枚</b></div></div>
-        <div class="foot-actions"><button class="small-button" id="exportSamples">登録データを保存（JSON）</button><button class="small-button" id="importSamples">登録データを読み込む</button><input type="file" id="importFile" accept=".json,application/json" /><button class="small-button danger" id="clearSamples">登録データを全削除</button></div>
-        <p class="explain">※「お手本判定」は事前学習済みAIの特徴量を使った近傍比較です。AI本体の重みを再学習するものではありません。登録した特徴量は端末内に保存され、別の端末には自動同期されません。</p>
-      </section>
       <div class="bottom">
-        <section class="panel"><h3>💡 判定を良くするコツ</h3><ul><li>それぞれを異なる角度・背景で撮った写真を登録</li><li>登録と判定で同一写真を使わずに試す</li><li>誤判定した写真も見本として追加して比較する</li></ul></section>
+        <section class="panel"><h3>💡 使い方</h3><ul><li>写真を選択して「AIで判定する」を押すだけです</li><li>事前の見本画像登録は不要です</li><li>候補以外の画像でもいずれかに分類されます。表示スコアは正解確率ではありません</li></ul></section>
       </div>
     </main>
     <footer>Little Vision Lab · 無料・サーバー不要の画像判定デモ</footer>
