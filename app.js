@@ -27,7 +27,20 @@ const backgroundCategories = [
   { key: 'cat', prompts: ['a photograph of a cat', 'a domestic cat sitting'] },
   { key: 'person', prompts: ['a portrait photograph of a person', 'people standing together in a photograph'] },
   { key: 'car', prompts: ['a photograph of a car', 'a vehicle parked on a street'] },
-  { key: 'building', prompts: ['a photograph of a building', 'a house on a street'] },
+  { key: 'building', label: '建物', prompts: ['a photograph of a large building', 'a house on a street'] },
+  { key: 'castle', label: '城・城郭', prompts: [
+    'a photograph of a Japanese castle with white walls and tiled roofs',
+    'a photograph of a medieval stone castle with towers',
+    'a photograph of an old castle or fortress'
+  ] },
+  { key: 'temple', label: '寺院・神社', prompts: [
+    'a photograph of a Japanese shrine or temple',
+    'a photograph of a traditional Buddhist temple'
+  ] },
+  { key: 'monument', label: '建造物・名所', prompts: [
+    'a photograph of a famous historic landmark',
+    'a photograph of an ancient stone monument'
+  ] },
   { key: 'landscape', prompts: ['a landscape photograph of mountains', 'a photograph of a beach and the sea'] },
   { key: 'bird', prompts: ['a photograph of a bird', 'a small bird perched on a branch'] },
   { key: 'flower', prompts: ['a close-up photograph of a flower', 'a bouquet of colorful flowers'] },
@@ -181,12 +194,18 @@ function displayResults(output) {
   for (const target of rankedTargets) target.score = target.raw / totalTarget;
   const best = rankedTargets[0];
   const gap = best.score - rankedTargets[1].score;
-  const otherBest = Math.max(...backgroundCategories.map(mean));
+  // The reported 3-way score is conditional on the target labels; even a
+  // castle can have a high "gorilla" percentage. Compare against unrelated
+  // labels BEFORE deciding whether the best target is acceptable.
+  const strongestBackground = backgroundCategories
+    .map((category) => ({ ...category, raw: mean(category) }))
+    .sort((a, b) => b.raw - a.raw)[0];
+  const relativeBackground = strongestBackground.raw / Math.max(bestRaw, Number.EPSILON);
 
-  // Provisional, user-requested thresholds. Accuracy must be tested.
-  // In addition, compare against explicit unrelated concepts so a
-  // clearly unrelated image does not always get forced into the top 3.
-  const isUnrelated = best.score < 0.50 || otherBest > bestRaw * 1.10;
+  // Provisional rejection heuristics: evaluate with real photos before
+  // treating these as reliable open-set thresholds.
+  const isUnrelated = relativeBackground >= 1.08 ||
+    (best.score < 0.50 && relativeBackground >= 0.85);
   const isAmbiguous = !isUnrelated && gap < 0.08;
 
   $('resultMode').textContent = 'CLIPによる画像判定';
@@ -194,7 +213,8 @@ function displayResults(output) {
     $('resultEmoji').textContent = '🚫';
     $('resultName').textContent = '関係ない可能性が高い';
     $('resultText').textContent =
-      'りんご・ゴリラ・ラッパのいずれにも十分一致しないと推定しました。';
+      'りんご・ゴリラ・ラッパ以外の特徴が強いと推定しました。' +
+      (strongestBackground.label ? ' 参考候補：' + strongestBackground.label + '。' : '');
   } else if (isAmbiguous) {
     $('resultEmoji').textContent = '❔';
     $('resultName').textContent = '判定があいまい';
@@ -226,7 +246,7 @@ function displayResults(output) {
   }
   container.hidden = false;
   $('scoreNote').textContent =
-    '3候補の相対スコアは正解確率ではありません。「関係ない」「あいまい」の判定は暫定的な基準によるもので、誤判定する場合があります。';
+    'この％は「りんご・ゴリラ・ラッパ」の3候補内だけでの割合です。正解確率ではありません。対象外判定は他の画像候補との比較による暫定的な推定です。';
   $('scoreNote').hidden = false;
   setNotice(isUnrelated
     ? '対象外の例との比較・スコア基準から、3種類以外と推定しました。判定は確定ではありません。'
@@ -245,7 +265,7 @@ $('analyze').addEventListener('click', async () => {
     setStatus('画像を判定しています…');
     objectUrl = URL.createObjectURL(selectedFile);
     const prompts = [...categories, ...backgroundCategories].flatMap((category) => category.prompts);
-    const output = await model(objectUrl, prompts);
+    const output = await model(objectUrl, prompts, { hypothesis_template: '{}' });
     displayResults(output);
     setStatus('AIの準備完了', 'ready');
   } catch (error) {
