@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f4f7fc" />
+  <meta name="description" content="画像をりんご・ゴリラ・ラッパに分類する無料のブラウザAIデモ。見本を登録して判定を調整できます。" />
+  <title>りんご・ゴリラ・ラッパ AI画像判定</title>
+  <style>
+    :root { color-scheme: light; --ink:#15213e; --sub:#60708f; --line:#e2e8f2; --blue:#3869e8; --bg:#f4f7fc; --white:#fff; --green:#17865e; --shadow:0 18px 54px rgba(27,53,106,.08); }
+    * {box-sizing:border-box}
+    body { margin:0; font-family: -apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif; background:var(--bg); color:var(--ink); line-height:1.65; }
+    .shell {max-width:1060px; margin:0 auto; padding:38px 22px 76px}
+    header {display:flex; gap:18px; justify-content:space-between; align-items:center; margin-bottom:25px}
+    .brand {display:flex; align-items:center; gap:11px; color:var(--blue); font-weight:850; letter-spacing:.03em; font-size:14px}
+    .brand-dot {height:32px; width:32px; border-radius:11px; display:grid; place-items:center; background:#e2ebff; font-size:20px}
+    .status {display:flex; align-items:center; gap:8px; font-size:12px; color:var(--sub); background:white; padding:8px 13px; border:1px solid var(--line); border-radius:999px; max-width:56%;}
+    .status-dot {width:8px; height:8px; border-radius:50%; background:#f2a33a; flex:none}
+    .status.ready .status-dot {background:#20aa75}.status.error .status-dot {background:#df5b5b}
+    h1 {margin:0; font-size:clamp(27px,4.2vw,44px); letter-spacing:-.035em; line-height:1.32}
+    h1 span {color:var(--blue)}
+    .lead {margin:12px 0 24px; color:var(--sub); font-size:15px}
+    .tags {display:flex; flex-wrap:wrap; gap:9px; margin-bottom:29px}
+    .tag {display:flex; gap:6px; align-items:center; padding:7px 14px; background:#eaf0fe; color:#2f56b6; border-radius:999px; font-size:13px; font-weight:650}
+    .columns {display:grid; grid-template-columns:minmax(0,1.12fr) minmax(310px,.88fr); gap:22px}
+    .panel {background:white; border:1px solid var(--line); border-radius:22px; padding:25px; box-shadow:var(--shadow); min-width:0}
+    .panel h2 {margin:0 0 4px; font-size:19px; letter-spacing:-.02em}
+    .hint {font-size:13px; color:var(--sub); margin:0 0 19px}
+    .drop {min-height:298px; border:2px dashed #b7c9f0; border-radius:17px; padding:22px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:#f9fbff; cursor:pointer; transition:.15s; position:relative; overflow:hidden}
+    .drop:hover,.drop.dragging {border-color:#3869e8; background:#f1f6ff}
+    .drop:focus-within {outline:3px solid #a8c0ff; outline-offset:3px}
+    .drop-icon {font-size:43px; margin-bottom:8px}
+    .drop-title {font-weight:750; font-size:16px}
+    .drop-note {color:var(--sub); font-size:12px; margin-top:5px}
+    #preview {max-width:100%; max-height:270px; object-fit:contain; border-radius:10px; display:none; margin:0 auto 11px}
+    .drop.has-image {min-height:298px}
+    .drop.has-image #preview {display:block}
+    .drop.has-image .drop-icon {display:none}
+    input[type=file] {position:absolute; width:1px; height:1px; opacity:0; overflow:hidden}
+    button {font:inherit; cursor:pointer; border-radius:12px; border:0; font-weight:730; transition:transform .1s,opacity .15s,background .15s}
+    button:focus-visible,select:focus-visible {outline:3px solid #95b3ff; outline-offset:2px}
+    button:active {transform:scale(.99)}
+    button:disabled {cursor:not-allowed; opacity:.55}
+    .button {padding:12px 17px; color:white; background:var(--blue); font-size:14px}
+    .button.secondary {background:#eff3fb; color:#385075}
+    .buttons {display:flex; gap:10px; margin-top:15px}
+    .buttons>* {flex:1}
+    .result-box {background:#f6f9ff; padding:22px; border-radius:17px; border:1px solid #e6edff; min-height:235px}
+    .eyebrow {font-size:12px; color:var(--sub); font-weight:650}
+    .prediction {display:flex; align-items:center; gap:13px; margin:8px 0 12px}
+    .prediction-emoji {font-size:47px; line-height:1}
+    .prediction-name {font-size:28px; font-weight:850; letter-spacing:-.03em}
+    .explain {font-size:12px; color:var(--sub); margin:8px 0 0}
+    .scores {margin-top:17px; display:grid; gap:13px}
+    .score-title {display:flex; justify-content:space-between; font-size:12px; font-weight:650; gap:8px}
+    .track {height:9px; background:#e5ebf5; overflow:hidden; border-radius:20px; margin-top:5px}
+    .track>div {height:100%; width:0; background:#7294f1; border-radius:20px; transition:width .4s}
+    .score-note {font-size:11px; color:var(--sub); margin:13px 0 0}
+    .notice {margin-top:16px; font-size:12px; color:#536480; padding:13px 14px; border:1px solid #e7ebf3; border-radius:12px; background:#fbfcff}
+    .warning {color:#985800; background:#fff8e9; border-color:#f8e8bf}
+    .wide {margin-top:22px}
+    .training-head {display:flex; justify-content:space-between; align-items:start; gap:20px}
+    .training-icon {font-size:30px; background:#eef4ff; border-radius:12px; padding:10px}
+    .train-grid {display:grid; grid-template-columns:1fr 1fr; gap:17px; margin-top:17px}
+    label {font-size:13px; font-weight:700; display:block; margin-bottom:7px}
+    select {width:100%; border:1px solid #cfd9eb; background:#fff; border-radius:11px; height:43px; padding:0 12px; font:inherit; color:var(--ink); font-size:14px}
+    .train-actions {display:flex; flex-wrap:wrap; align-items:end; gap:9px}
+    .count-list {display:flex; flex-wrap:wrap; gap:8px; margin-top:17px}
+    .count {background:#f4f7fc; border:1px solid #e7ebf3; border-radius:10px; padding:8px 12px; font-size:12px}
+    .count b {font-variant-numeric:tabular-nums}
+    .foot-actions {display:flex; flex-wrap:wrap; gap:8px; margin-top:15px; align-items:center}
+    .small-button {padding:8px 12px; font-size:12px; color:#526683; background:#eef2f8}
+    .small-button.danger {color:#ac4949; background:#fff0ef}
+    .bottom {display:grid; grid-template-columns:1fr 1fr; gap:19px; margin-top:22px}
+    .bottom .panel {box-shadow:none; padding:19px 22px}
+    .bottom h3 {font-size:14px; margin:0 0 6px}
+    .bottom p,.bottom li {font-size:12px; color:var(--sub); margin:0}
+    .bottom ul {margin:0; padding-left:20px}
+    .toast {position:fixed; bottom:26px; left:50%; transform:translateX(-50%); z-index:20; padding:11px 19px; background:#213255; color:white; border-radius:14px; box-shadow:0 9px 32px rgba(0,0,0,.14); font-size:13px; max-width:calc(100% - 35px); display:none; text-align:center}
+    .toast.show {display:block}
+    footer {color:#7a89a4; margin-top:26px; font-size:12px; text-align:center}
+    @media(max-width:750px) {.shell{padding:18px 15px 44px}.columns,.bottom,.train-grid{grid-template-columns:1fr}.panel{padding:18px;border-radius:18px}header{align-items:flex-start}.status{max-width:50%;font-size:11px}.tags{margin-bottom:20px}.lead{font-size:13px}.drop{min-height:240px}.drop.has-image{min-height:240px}.training-head{gap:10px}.train-actions>.button{width:100%}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand"><span class="brand-dot">✦</span> LITTLE VISION LAB <span style="color:#9da9bb">/ DEMO 01</span></div>
+      <div class="status" id="status" role="status" aria-live="polite"><span class="status-dot"></span><span id="statusText">AIを準備しています…</span></div>
+    </header>
+    <main>
+      <h1>この写真は、<br><span>なにが写っている？</span></h1>
+      <p class="lead">画像を選ぶだけでAIが判定。まずは「りんご・ゴリラ・ラッパ」の3種類から実験してみましょう。</p>
+      <div class="tags"><span class="tag">🍎 りんご</span><span class="tag">🦍 ゴリラ</span><span class="tag">🎺 ラッパ</span></div>
+      <div class="columns">
+        <section class="panel" aria-labelledby="uploadTitle">
+          <h2 id="uploadTitle">01. 写真を選ぶ</h2>
+          <p class="hint">端末の画像を選択。ドラッグ＆ドロップにも対応。</p>
+          <div class="drop" id="drop" role="button" tabindex="0" aria-label="判定する画像を選択">
+            <input id="file" type="file" accept="image/*" aria-label="写真ファイル" />
+            <img id="preview" alt="判定する写真のプレビュー" />
+            <div class="drop-icon" aria-hidden="true">📷</div>
+            <div class="drop-title" id="dropTitle">クリックして写真を選ぶ</div>
+            <div class="drop-note" id="dropNote">またはここに画像をドロップ</div>
+          </div>
+          <div class="buttons"><button class="button" id="analyze" disabled>AIで判定する</button><button class="button secondary" id="reset" type="button">画像をクリア</button></div>
+          <div class="notice">🔒 写真の判定処理はブラウザ内で実行します。画像自体をサービス側へアップロードする処理はありません。初回はAIモデルの読み込みにインターネット接続が必要です。</div>
+        </section>
+        <section class="panel" aria-labelledby="resultTitle">
+          <h2 id="resultTitle">02. AIの判定</h2>
+          <p class="hint">判定結果と、3種類のスコアを表示します。</p>
+          <div class="result-box" aria-live="polite">
+            <div class="eyebrow" id="resultMode">判定待ち</div>
+            <div class="prediction"><span class="prediction-emoji" id="resultEmoji">🔎</span><span class="prediction-name" id="resultName">画像を選んでください</span></div>
+            <p class="explain" id="resultText">写真を選び、「AIで判定する」を押してください。</p>
+            <div class="scores" id="scores" hidden></div>
+            <p class="score-note" id="scoreNote" hidden></p>
+          </div>
+          <div class="notice warning" id="modeNotice">はじめは一般画像用のAIで判定します。赤いりんごなどは、うまく分類できない場合があります。下のお手本登録で改善を試せます。</div>
+        </section>
+      </div>
+      <section class="panel wide" aria-labelledby="trainTitle">
+        <div class="training-head"><div><h2 id="trainTitle">03. お手本を登録して判定を調整</h2><p class="hint" style="margin-bottom:0">各種類の見本を2枚以上ずつ登録すると、写真の特徴を比べる「お手本判定」に切り替わります。</p></div><span class="training-icon" aria-hidden="true">🧠</span></div>
+        <div class="train-grid">
+          <div><label for="trainLabel">何の写真を登録しますか？</label><select id="trainLabel"><option value="apple">🍎 りんご</option><option value="gorilla">🦍 ゴリラ</option><option value="trumpet">🎺 ラッパ</option></select></div>
+          <div class="train-actions"><button class="button" id="addTraining" disabled>見本画像を追加する（複数可）</button><input type="file" id="trainFile" multiple accept="image/*" aria-label="見本画像ファイル" /></div>
+        </div>
+        <div class="count-list" id="counts"><div class="count">🍎 りんご <b>0枚</b></div><div class="count">🦍 ゴリラ <b>0枚</b></div><div class="count">🎺 ラッパ <b>0枚</b></div></div>
+        <div class="foot-actions"><button class="small-button" id="exportSamples">登録データを保存（JSON）</button><button class="small-button" id="importSamples">登録データを読み込む</button><input type="file" id="importFile" accept=".json,application/json" /><button class="small-button danger" id="clearSamples">登録データを全削除</button></div>
+        <p class="explain">※「お手本判定」は事前学習済みAIの特徴量を使った近傍比較です。AI本体の重みを再学習するものではありません。登録した特徴量は端末内に保存され、別の端末には自動同期されません。</p>
+      </section>
+      <div class="bottom">
+        <section class="panel"><h3>💡 判定を良くするコツ</h3><ul><li>それぞれを異なる角度・背景で撮った写真を登録</li><li>登録と判定で同一写真を使わずに試す</li><li>誤判定した写真も見本として追加して比較する</li></ul></section>
+        <section class="panel"><h3>🔧 ボーリング写真への応用</h3><p>この実験で写真の読み込み・特徴抽出・分類・結果表示を確認できます。次は「掘削・標準貫入試験・コア」などへ分類を変え、現場別に精度を検証します。</p></section>
+      </div>
+    </main>
+    <footer>Little Vision Lab · 無料・サーバー不要の画像判定デモ</footer>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
